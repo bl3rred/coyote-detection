@@ -4,20 +4,16 @@ __pycache__/
 *.pyo
 *.pyd
 .env
-.venv
+venv/
 yolov8env/
-
-# ML
-*.onnx
-*.pt.bak
 
 # Node
 node_modules/
 build/
-dist/
 
 # OS
 .DS_Store
 
-# Logs
-*.log
+# Model cache
+runs/
+
