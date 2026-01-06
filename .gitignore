@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+yolov8env/
+
+# ML
+*.onnx
+*.pt.bak
+
+# Node
+node_modules/
+build/
+dist/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
