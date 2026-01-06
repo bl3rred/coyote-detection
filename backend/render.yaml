@@ -1,6 +1,18 @@
 services:
   - type: web
-    name: coyote-detection-api
+    name: uav-object-detection-api
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    region: oregon
+    plan: free
+    runtime: python
+    pythonVersion: "3.11"  # Use Python 3.11 for better compatibility
+    buildCommand: |
+      pip install --upgrade pip setuptools wheel
+      pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cpu
+      pip install ultralytics==8.0.196  # Install stable version first
+      pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000  # Changed to port 10000
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    autoDeploy: true
