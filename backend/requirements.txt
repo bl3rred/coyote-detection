@@ -2,7 +2,8 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 pillow==10.1.0
-ultralytics==8.0.230
-torch>=2.0.0
-numpy==1.24.3
+ultralytics==8.0.196  # Downgraded from 8.0.230
+torch==2.1.2
+torchvision==0.16.2
+numpy==1.23.5  # Downgraded from 1.24.3
 opencv-python-headless==4.8.1.78
