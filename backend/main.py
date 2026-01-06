@@ -1,17 +1,3 @@
-"""
-YOLOv8 Detection API Backend
-File: backend/main.py
-
-Requirements (requirements.txt):
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-pillow==10.1.0
-ultralytics==8.0.230
-torch>=2.0.0
-numpy==1.24.3
-"""
-
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -23,6 +9,7 @@ import torch
 from datetime import datetime
 import cv2
 import numpy as np
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -33,13 +20,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="YOLOv8 Detection API", version="1.0.0")
 
-# CORS middleware for frontend access
+# CORS middleware for frontend access - UPDATED
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Expose all headers to frontend
 )
 
 # Global model instance
@@ -53,7 +41,14 @@ async def load_model():
     try:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Loading model on device: {device}")
-        model = YOLO('best.pt')
+        
+        # Try different model paths
+        try:
+            model = YOLO('best.pt')
+        except:
+            logger.warning("best.pt not found, using yolov8n.pt")
+            model = YOLO('yolov8n.pt')
+            
         model.to(device)
         logger.info("Model loaded successfully")
     except Exception as e:
@@ -76,14 +71,14 @@ async def detect_objects(
     confidence: float = Query(0.25, ge=0.0, le=1.0, description="Confidence threshold")
 ):
     """
-    Detect coyotes in uploaded image
+    Detect objects in uploaded image
     
     Args:
         file: Image file (JPEG, PNG)
         confidence: Detection confidence threshold (0.0-1.0)
     
     Returns:
-        Annotated image with bounding boxes if coyote found
+        Annotated image with bounding boxes
     """
     start_time = datetime.now()
     
@@ -101,7 +96,7 @@ async def detect_objects(
             image = image.convert('RGB')
         
         # Run inference
-        logger.info(f"Running coyote detection on {file.filename}")
+        logger.info(f"Running detection on {file.filename}")
         results = model.predict(
             source=image,
             conf=confidence,
@@ -109,21 +104,36 @@ async def detect_objects(
             verbose=False
         )
         
-        # Check if coyote was detected
+        # Check if objects were detected
         boxes = results[0].boxes
-        coyote_found = False
+        objects_found = False
         max_confidence = 0.0
+        detection_count = 0
+        detections_list = []
         
-        if len(boxes) > 0:
-            # Assuming your model has coyote as one of the classes
-            # Get the highest confidence detection
+        if boxes is not None and len(boxes) > 0:
+            detection_count = len(boxes)
             confidences = boxes.conf.cpu().numpy()
+            classes = boxes.cls.cpu().numpy()
+            
+            # Get class names
+            names = results[0].names
+            
+            # Create detections list
+            for i in range(len(boxes)):
+                box = boxes.xyxy[i].cpu().numpy()
+                detections_list.append({
+                    "class": names[int(classes[i])],
+                    "confidence": float(confidences[i]),
+                    "bbox": box.tolist()
+                })
+            
             max_confidence = float(confidences.max()) if len(confidences) > 0 else 0.0
-            coyote_found = True
+            objects_found = True
         
         processing_time = (datetime.now() - start_time).total_seconds()
         
-        if coyote_found:
+        if objects_found:
             # Annotate image with bounding boxes
             annotated = results[0].plot()
             annotated_rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
@@ -135,29 +145,34 @@ async def detect_objects(
             img_byte_arr.seek(0)
             
             logger.info(
-                f"Coyote detected in {file.filename}: confidence={max_confidence:.2f}, "
-                f"time={processing_time:.2f}s"
+                f"Objects detected in {file.filename}: count={detection_count}, "
+                f"max_confidence={max_confidence:.2f}, time={processing_time:.2f}s"
             )
             
             return StreamingResponse(
                 img_byte_arr,
                 media_type="image/png",
                 headers={
-                    "X-Coyote-Found": "true",
+                    "X-Objects-Found": "true",
+                    "X-Detections": str(detection_count),  # Added this
                     "X-Confidence-Score": f"{max_confidence:.3f}",
-                    "X-Processing-Time": f"{processing_time:.3f}"
+                    "X-Processing-Time": f"{processing_time:.3f}",
+                    "Access-Control-Expose-Headers": "*"  # Important for CORS
                 }
             )
         else:
-            logger.info(f"No coyote detected in {file.filename}, time={processing_time:.2f}s")
+            logger.info(f"No objects detected in {file.filename}, time={processing_time:.2f}s")
             
-            # Return empty response with headers indicating no coyote found
+            # Return a blank image or original image
+            # Or you can return JSON instead
             return StreamingResponse(
-                io.BytesIO(),
-                media_type="image/png",
+                io.BytesIO(contents),  # Return original image
+                media_type=file.content_type,
                 headers={
-                    "X-Coyote-Found": "false",
-                    "X-Processing-Time": f"{processing_time:.3f}"
+                    "X-Objects-Found": "false",
+                    "X-Detections": "0",
+                    "X-Processing-Time": f"{processing_time:.3f}",
+                    "Access-Control-Expose-Headers": "*"
                 }
             )
         
